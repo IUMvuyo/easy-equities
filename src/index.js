@@ -3,6 +3,7 @@ var accounts = require("./accounts");
 var instruments = require("./instruments");
 var constants = require("./constants");
 var portfolio = require("./portfolio");
+var educationalResources = require("./educationalResources");
 
 module.exports = {
   auth,
@@ -10,4 +11,5 @@ module.exports = {
   instruments,
   constants,
   portfolio,
+  educationalResources,
 };

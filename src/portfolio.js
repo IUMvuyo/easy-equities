@@ -1,5 +1,142 @@
-var accounts = require("./accounts");
+// Additional imports if needed
 var instruments = require("./instruments");
+var accounts = require("./accounts");
+
+// Function to calculate volatility
+function calculateVolatility(prices) {
+  const returns = prices.map((price, i, arr) => {
+    if (i === 0) return 0;
+    return (price - arr[i - 1]) / arr[i - 1];
+  });
+  const variance =
+    returns.reduce((acc, val) => acc + Math.pow(val - returns.mean(), 2), 0) /
+    (returns.length - 1);
+  return Math.sqrt(variance) * Math.sqrt(returns.length);
+}
+
+// Function to calculate beta
+function calculateBeta(portfolioReturns, marketReturns) {
+  const covariance = covariance(portfolioReturns, marketReturns);
+  const variance = variance(marketReturns);
+  return covariance / variance;
+}
+
+// Function to place a stop-loss order
+async function placeStopLossOrder(contractCode, stopPrice) {
+  try {
+    // Assuming accounts.js has a method to place stop-loss orders
+    await accounts.placeStopLossOrder(contractCode, stopPrice);
+    console.log(`Stop-loss order placed for ${contractCode} at ${stopPrice}`);
+  } catch (error) {
+    console.error(
+      `Failed to place stop-loss order for ${contractCode}: ${error.message}`
+    );
+  }
+}
+
+// Function to rebalance the portfolio
+function rebalancePortfolio(portfolio, targetAllocation) {
+  // Calculate the current allocation of the portfolio
+  const currentAllocation = calculateCurrentAllocation(portfolio);
+
+  // Determine the necessary trades to achieve the target allocation
+  const trades = calculateRebalancingTrades(
+    currentAllocation,
+    targetAllocation
+  );
+
+  // Execute the trades
+  executeTrades(trades);
+}
+
+// Helper function to calculate the current allocation of the portfolio
+function calculateCurrentAllocation(portfolio) {
+  // Calculate the total portfolio value
+  const totalPortfolioValue = portfolio.reduce((total, holding) => {
+    return total + holding.currentValue;
+  }, 0);
+
+  // Calculate the allocation of each asset
+  const currentAllocation = portfolio.map((holding) => {
+    return {
+      contractCode: holding.contractCode,
+      allocation: (holding.currentValue / totalPortfolioValue) * 100,
+    };
+  });
+
+  return currentAllocation;
+}
+
+// Helper function to calculate the necessary trades to achieve the target allocation
+function calculateRebalancingTrades(currentAllocation, targetAllocation) {
+  // Initialize an array to hold the trades
+  const trades = [];
+
+  // Iterate over the current allocation
+  currentAllocation.forEach((currentHolding) => {
+    // Find the corresponding target allocation for the current holding
+    const targetHolding = targetAllocation.find(
+      (target) => target.contractCode === currentHolding.contractCode
+    );
+
+    // If there is no target allocation for the current holding, skip it
+    if (!targetHolding) return;
+
+    // Calculate the difference between the current and target allocation
+    const allocationDifference =
+      targetHolding.allocation - currentHolding.allocation;
+
+    // If the difference is positive, we need to buy more of the asset
+    if (allocationDifference > 0) {
+      trades.push({
+        contractCode: currentHolding.contractCode,
+        action: "BUY",
+        amount: allocationDifference,
+      });
+    }
+    // If the difference is negative, we need to sell the asset
+    else if (allocationDifference < 0) {
+      trades.push({
+        contractCode: currentHolding.contractCode,
+        action: "SELL",
+        amount: Math.abs(allocationDifference),
+      });
+    }
+  });
+
+  // Return the array of trades
+  return trades;
+}
+
+// Helper function to execute the trades
+async function executeTrades(trades) {
+  // Iterate over the trades array
+  for (const trade of trades) {
+    // Determine the action to take based on the trade
+    const action = trade.action;
+    const contractCode = trade.contractCode;
+    const amount = trade.amount;
+
+    // Place the trade using the EasyEquities API
+    // This is a placeholder for the actual API call
+    // You will need to replace this with the actual API call to place a trade
+    try {
+      if (action === "BUY") {
+        // Place a buy order
+        await accounts.placeBuyOrder(contractCode, amount);
+        console.log(`Buy order placed for ${contractCode} at ${amount}`);
+      } else if (action === "SELL") {
+        // Place a sell order
+        await accounts.placeSellOrder(contractCode, amount);
+        console.log(`Sell order placed for ${contractCode} at ${amount}`);
+      }
+    } catch (error) {
+      console.error(
+        `Failed to place ${action} order for ${contractCode}: ${error.message}`
+      );
+    }
+  }
+}
 
 module.exports = {
   /**
@@ -29,9 +166,9 @@ module.exports = {
     }
 
     let priceRequests = [];
-    const currentContracts = new Set(Object.keys(currentHoldings))
-    const desiredContracts = new Set(Object.keys(portfolioWeights))
-    const allContracts = Array.from(currentContracts || desiredContracts)
+    const currentContracts = new Set(Object.keys(currentHoldings));
+    const desiredContracts = new Set(Object.keys(portfolioWeights));
+    const allContracts = Array.from(currentContracts || desiredContracts);
     for (const contractCode of allContracts) {
       priceRequests.push(instruments.currentPrice(contractCode));
     }
@@ -62,7 +199,9 @@ module.exports = {
     if (commonHoldings.length > 0) {
       for (const holding of commonHoldings) {
         holdingsDifferences[holding] =
-          Math.round((desiredHoldings[holding] - currentHoldings[holding]) * 10000) / 10000;
+          Math.round(
+            (desiredHoldings[holding] - currentHoldings[holding]) * 10000
+          ) / 10000;
       }
     }
 
